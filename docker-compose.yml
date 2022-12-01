@@ -1,0 +1,108 @@
+version: '3.8'
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:12.6}
+    build:
+      context: .
+      dockerfile: ./postgres/Dockerfile
+    hostname: postgres
+    container_name: postgres
+    networks:
+      - puppet
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - PGPORT=5432
+      - POSTGRES_USER=puppetdb
+      - POSTGRES_PASSWORD=puppetdb
+      - POSTGRES_DB=puppetdb
+      - CERT_VOLUME=puppetdb-postgres
+    healthcheck:
+      # existence check for puppetdb database
+      test: [ 'CMD-SHELL', "psql --username=puppetdb puppetdb -c ''" ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 90s
+    volumes:
+      - puppetdb-postgres:/var/lib/postgresql/data
+      - ./postgres/postgres-custom:/docker-entrypoint-initdb.d
+    restart: always
+  puppetdb:
+    build:
+      context: .
+      dockerfile: ./puppetdb/Dockerfile
+    image: ${PUPPETDB_IMAGE:-puppetdb:1.0}
+    container_name: puppetdb
+    hostname: puppetdb
+    networks:
+      - puppet
+    environment:
+      - PUPPERWARE_ANALYTICS_ENABLED=${PUPPERWARE_ANALYTICS_ENABLED:-false}
+      - CERTNAME=puppetdb
+      - DNS_ALT_NAMES=${PUPPETDB_DNS_ALT_NAMES:-puppetdb}
+      - USE_PUPPETSERVER=true
+      - PUPPETSERVER_HOSTNAME=puppetserver
+      - PUPPETSERVER_PORT=8140
+      - PUPPETDB_POSTGRES_HOSTNAME=postgres
+      - PUPPETDB_POSTGRES_PORT=5432
+      - PUPPETDB_USER=puppetdb
+      - PUPPETDB_PASSWORD=puppetdb
+    volumes:
+      - puppetdb:/opt/puppetlabs/server/data/puppetdb
+    restart: always
+#    ports:
+#      - 8081:8081
+  puppetserver:
+    build:
+      context: .
+      dockerfile: ./puppetserver/Dockerfile
+    image: ${PUPPETSERVER_IMAGE:-puppetserver:1.0}
+    container_name: puppetserver
+    hostname: puppetserver
+    networks:
+      - puppet
+    environment:
+      - PUPPERWARE_ANALYTICS_ENABLED=${PUPPERWARE_ANALYTICS_ENABLED:-false}
+      - PUPPETSERVER_HOSTNAME=puppetserver
+      - CA_ALLOW_SUBJECT_ALT_NAMES=true
+      - DNS_ALT_NAMES=${PUPPET_DNS_ALT_NAMES:-puppetserver}
+      - PUPPET_MASTERPORT=8140
+      - PUPPETDB_SERVER_URLS=https://puppetdb:8081
+      - CERT_VOLUME=puppetserver-config
+      - CERT_SRCDIR=puppet-oss
+      - CERT_DESTDIR=ssl
+    volumes:
+      - ./puppetserver/r10k/github-token:/etc/puppetlabs/r10k/github-token
+      - puppetserver-config:/etc/puppetlabs/puppet/
+      - puppetserver-ca:/etc/puppetlabs/puppetserver/ca
+      - puppetserver-data:/opt/puppetlabs/server/data/puppetserver/
+    restart: always
+    ports:
+      - 8140:8140
+  puppetboard:
+    build:
+      context: .
+      dockerfile: ./puppetboard/Dockerfile
+    image: ${PUPPETSERVER_IMAGE:-puppetboard:1.0}
+    environment:
+      - PUPPETDB_HOST=puppetdb
+      - PUPPETDB_PORT=8080
+      - PUPPETBOARD_PORT=9090
+    container_name: puppetboard
+    hostname: d
+    networks:
+      - puppet
+    restart: always
+    ports:
+      - 9090:9090
+volumes:
+  puppetdb-postgres:
+    labels:
+      com.puppet.certs.uid: 999
+      com.puppet.certs.gid: 999
+  puppetdb:
+  puppetserver-config:
+  puppetserver-ca:
+  puppetserver-data:
+networks:
+  puppet:

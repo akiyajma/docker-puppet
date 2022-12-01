@@ -1,0 +1,8 @@
+git:
+  username: 'akiyajma'
+  oauth_token: '/etc/puppetlabs/r10k/github-token'
+sources:
+  test:
+    remote: 'https://github.com/akiyajma/cobbler-docker.git'
+    basedir: '/etc/puppetlabs/code/environments'
+    prefix: true
